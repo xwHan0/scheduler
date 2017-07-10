@@ -7,6 +7,24 @@ Scheduler is a selector which decides one from a sequence using a strategy like 
 a scheduler is form by a map data structure which includes decided function, update function, all configures, requests or
 sub scheduler.
 
+A scheduler can be orgnized by more than one sub-scheduler to form a hierachy scheduler tree. In this scheduler tree, a none-leaflet node processes decide or selection among all sub nodes. 
+
+For leaflet node, there are two scheduler describes format it as follow:
+* <number>: The request priority. Zero is none request, the more of value represents priority.
+* map: Includes below fields:
+ - req: The request priority. 
+
+The none-leaflet node's format is a map which includes below field at least:
+* run: Schedule process function. The form is: (sch-param-map & sub-node) => grant-map, where:
+ - sch-param-map: 
+ - sub-node: Scheduler tree node (Recur).
+* pri<optional>: Node priority for parent node schedule. If ignore, uses selected node's priority instead of it.
+* subs: A vector of sub-node.
+
+Scheduler.core applies :run among all sub-node nodes, and return a grant formatted an map as follow:
+* pri: Grant priority. 
+
+
 ## Request format:
 There are 2 data structure to describe a request.
 1. Number vector format ([1 2 0]): Each element represents a request and the value is request priority.
@@ -120,8 +138,9 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   "Runs scheduler sc and return a grant."
   [sc]
   (cond
-    (number? sc) {:pri sc}
-    (contains? sc :pri) sc
+    (number? sc) {:pri sc}    ;若调度节点为<数字>，则把该数字的值当作grant返回
+    (contains? sc :req) (into sc {:pri (:req sc)})
+    ;若调度节点包含:run域（非叶子节点），则使用:run函数对子节点进行选择
     (contains? sc :run) (apply (get sc :run) sc (get sc :subs))
     :else (throw (Exception. (str sc " is not a valid request format.")))))
 
@@ -172,7 +191,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
 "
   ([{:keys [ptrs get-ptr max-req wgts lvl weights] 
       :or {ptrs [0] max-req 1 lvl 0
-           weights (repeat (count nodes) 1)
+           weights (vec (repeat (count nodes) 1))
            wgts weights
            get-ptr (fn [sch-cfg-map gnt] (get (get sch-cfg-map ptrs [0]) (get gnt :pri 0) 0))}
       :as sch-cfg-map} 
@@ -200,7 +219,11 @@ defsch macro translates scheduler DSL into map structure which include follow fi
                wrr-reload-time (wrr-weight-reload-time wgt weight)    ;计算当前节点需要reload的时间。
                last-reload-time (get rst-gnt :wrr-reload-time)        ;获取上一个选中的节点的reload时间
                ;生成调度结果
-               {:keys [pri] :as gnt} (into gnt {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
+               {:keys [pri] :as gnt} (->  gnt 
+                                          (into {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
+                                          (into (->>  node
+                                                      (remove #(-> val func?))
+                                                      (dissoc :subs))))
                ptr (get-ptr sch-cfg-map gnt)     ;获取当前节点的指针
                next-index (rem (inc index) nodes-num)]
            (cond (and (pos? wgt) (>= pri max-req)) 
@@ -339,11 +362,17 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   [handler]
   {:run
     (fn [{:keys [calendar-ptr calendar-tbl lvl] :as cfg} & nodes]
-      (let [{:keys [ptr work-conserver?] :or {ptr 0 work-conserver? true}} (get calendar-tbl calendar-ptr 0)
+      (let [{:keys [pri-changes] :or {pri-changes (vec (repeat (count nodes) 0))}} (get calendar-tbl calendar-ptr 0)
+            nodes (map (fn [node change] 
+                        (cond (number? node) (+ node change)
+                              (contains? node :req) (update node :req + change)
+                              :else (update node :pri + change))))
             gnt (->> ptr (get nodes) runsch)]
-        (cond (pos? (:pri gnt)) (assoc gnt :calendar? true :lvl lvl)
-              work-conserver? (assoc (apply (get handler :run) cfg nodes) :calendar? false)
-              :else {:pri 0 :index 0 :lvl lvl :calendar? true})))
+            gnt
+        ;(cond (pos? (:pri gnt)) (assoc gnt :calendar? true :lvl lvl)
+        ;      work-conserver? (assoc (apply (get handler :run) cfg nodes) :calendar? false)
+        ;      :else {:pri 0 :index 0 :lvl lvl :calendar? true})
+        ))
    :update
     (fn [{:keys [calendar-ptr calendar-tbl] :as sc} gnt]
       (let [next-ptr (-> calendar-ptr inc (rem (count calendar-tbl)))]
