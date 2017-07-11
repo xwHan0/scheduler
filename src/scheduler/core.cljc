@@ -134,15 +134,31 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   [name scs]
   `(def ~name (atom (sch ~scs))))
 
-(defn- runsch
-  "Runs scheduler sc and return a grant."
+(defn runsch
+  "Recurrently run ':run' functions among all sub nodes and return a grant."
   [sc]
-  (cond
-    (number? sc) {:pri sc}    ;若调度节点为<数字>，则把该数字的值当作grant返回
-    (contains? sc :req) (into sc {:pri (:req sc)})
-    ;若调度节点包含:run域（非叶子节点），则使用:run函数对子节点进行选择
-    (contains? sc :run) (apply (get sc :run) sc (get sc :subs))
-    :else (throw (Exception. (str sc " is not a valid request format.")))))
+  (let [gnt (if (map? sc)
+              (if-let [{:keys [run subs req]} sc]   ;== ConditionA: 当前请求节点非叶子节点，并且包含优先级信息
+                (if (pos? req)
+                  (let [{:keys [req] :as gnt} (apply run sc subs)]  ;调度子节点
+                    (if (pos? req)
+                      (assoc gnt :req req)    ;子调度有Grant，则修改优先级
+                      gnt))   ;若子调度返回无Grant，则返回无Grant
+                  sc)   ;若当前节点优先级信息为“无请求”，则直接返回当前节点
+                (if-let [{:keys [run subs]}]  ;== ConditionB: 当前请求节点非叶子节点，但不包含优先级信息
+                  (apply run sc subs)   ;
+                  (if-let [{:keys [req]} sc]  ;== ConditionC: 当前请求节点为叶子节点，包含优先级信息
+                    sc  ;子节点，直接透传优先级
+                    ;== ConditionD
+                    (throw (Exception. (str "Schedule request node |" sc "| should have :req field or :run and :subs field."))))))
+              (throw (Exception. (str "Schedule request node |" sc "| is not a map format."))))]
+    (dissoc gnt :run :subs)))  ;Grant中不需要的域删除)
+  ; (cond
+  ;   (number? sc) {:pri sc}    ;若调度节点为<数字>，则把该数字的值当作grant返回
+  ;   (contains? sc :req) (into sc {:pri (:req sc)})
+  ;   ;若调度节点包含:run域（非叶子节点），则使用:run函数对子节点进行选择
+  ;   (contains? sc :run) (apply (get sc :run) sc (get sc :subs))
+  ;   :else (throw (Exception. (str sc " is not a valid request format."))))
 
 (defn- upsch
   [sc gnt]
@@ -156,7 +172,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
       curr-node)))
 
 (defn schedule
-  "Runs scheduler one time, update sc and return grant map."
+  "Runs schedule request node 'sc' one time (call runsch function), update sc and return grant map."
   [sc]
   (let [gnt (runsch @sc)]
     (swap! sc upsch gnt)
@@ -211,7 +227,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
             ]
        (if nodes-lst
          (let [node (first nodes-lst)     ;获取当前请求节点
-               gnt (runsch node)    ;运行当前结点，获取结果Grant
+              ;  gnt (runsch node)    ;运行当前结点，获取结果Grant
                ;wgt (if wgts-lst (first wgts-lst) nil)   ;获取当前调度权重
                ;wgt (if wgt wgt 1)      ;若没有wgts配置（标准RR）或者wgt配置为nil（总是有权重）或者wgts配置项不够，则设置权重为1
                wgt (first wgts-lst) ;获取当前调度权重
@@ -219,20 +235,21 @@ defsch macro translates scheduler DSL into map structure which include follow fi
                wrr-reload-time (wrr-weight-reload-time wgt weight)    ;计算当前节点需要reload的时间。
                last-reload-time (get rst-gnt :wrr-reload-time)        ;获取上一个选中的节点的reload时间
                ;生成调度结果
-               {:keys [pri] :as gnt} (->  gnt 
-                                          (into {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
-                                          (into (->>  node
-                                                      (remove #(-> val func?))
-                                                      (dissoc :subs))))
+               {:keys [req] :as gnt} (into (runsch node) {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
+              ;  {:keys [pri] :as gnt} (->  gnt 
+              ;                             (into {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
+              ;                             (into (->>  node
+              ;                                         (remove #(-> val func?))
+              ;                                         (dissoc :subs))))
                ptr (get-ptr sch-cfg-map gnt)     ;获取当前节点的指针
                next-index (rem (inc index) nodes-num)]
-           (cond (and (pos? wgt) (>= pri max-req)) 
+           (cond (and (pos? wgt) (>= req max-req)) 
                   gnt   ;只要找到第一个有权重，并且最高优先级节点，则直接返回
-                (<= pri 0)   ;无效请求，跳过
+                (<= req 0)   ;无效请求，跳过
                   (recur rst-gnt (next nodes-lst) (next wgts-lst) (next weights-lst) next-index)
                 (or (= nil last-reload-time) (< wrr-reload-time last-reload-time))  ;WRR有权重者覆盖无权重者
                   (recur gnt (next nodes-lst) (next wgts-lst) (next weights-lst) next-index)
-                (and (== wrr-reload-time last-reload-time) (> pri (:pri rst-gnt)))  ;都有权重，优先级高者被选择
+                (and (== wrr-reload-time last-reload-time) (> req (:req rst-gnt)))  ;都有权重，优先级高者被选择
                   (recur gnt (next nodes-lst) (next wgts-lst) (next weights-lst) next-index)
                 (let [lst-gnt-distance (- (:index rst-gnt) ptr)
                       lst-gnt-distance (if (< lst-gnt-distance 0) (+ lst-gnt-distance nodes-num) lst-gnt-distance)
