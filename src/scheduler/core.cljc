@@ -2,85 +2,79 @@
   ^{:author "xwHan"
     :doc "Common Scheduler models for ESL in communication fields.
 
+
 # Introduce
-Scheduler is a selector which decides one from a sequence using a strategy like find and search functions. In Scheduler,
-a scheduler is form by a map data structure which includes decided function, update function, all configures, requests or
-sub scheduler.
+Scheduler is a selector which decides one from a sequence collection using some strategy like find and search functions. 
 
-A scheduler can be orgnized by more than one sub-scheduler to form a hierachy scheduler tree. In this scheduler tree, a none-leaflet node processes decide or selection among all sub nodes. 
+A scheduler can be orgnized by more than one sub-scheduler to form a hierachy scheduler tree. Every none-leaflet node processes decide or selection among all sub nodes through a customed schedule algorithm.
 
+## Schedule Request
 For leaflet node, there are two scheduler describes format it as follow:
 * <number>: The request priority. Zero is none request, the more of value represents priority.
 * map: Includes below fields:
- - req: The request priority. 
+ - req: The request priority. Zero is none request, the more of value represents priority.
 
 The none-leaflet node's format is a map which includes below field at least:
-* run: Schedule process function. The form is: (sch-param-map & sub-node) => grant-map, where:
- - sch-param-map: 
- - sub-node: Scheduler tree node (Recur).
-* pri<optional>: Node priority for parent node schedule. If ignore, uses selected node's priority instead of it.
-* subs: A vector of sub-node.
-
-Scheduler.core applies :run among all sub-node nodes, and return a grant formatted an map as follow:
-* pri: Grant priority. 
-
-
-## Request format:
-There are 2 data structure to describe a request.
-1. Number vector format ([1 2 0]): Each element represents a request and the value is request priority.
-2. Map vector format ([{:req 1} {:req 2} {:req 0}]): Each element is a map who includes a :req field at least. And the :req value is request priority.
-
-## Grant map fields:
-Scheduler uses a map data structure described a grant.
-* pri: Grant priority. 0 means invalid grant. The priority is the more with the pri larger
-* lvl: Scheduler level for hierachy scheduler
-* index: The position of grant in all requests
-There may be others fields which adds by the user.
-
-## Scheduler 
-
-A scheduler is a map and should include follow fields:
-* :run : A schedule run function which takes a cfg-map and one or more nodes parameters format and return a grant map. like:
+* req<optional>: The request priority. Ingore means the request from :run's grant which is called request bypass. This field is added by user.
+* lvl: Schedule tree depth. This field is added by defsch macro automatic.
+* run: Schedule process function. The form is: (sch-param-map ts & sub-node) => grant-map, where:
 ```
-(fn [cfg-map    ;scheduler configure map
+(fn [cfg-param-map    ;scheduler configure map
+     ts         ;time for scheduler run
      & nodes]   ;shcuduler requestion collection
-  {:pri   ;Grant priority. 0 means none grant
+  {:req   ;Grant priority. 0 means none grant
    :index}) ;Grant position in requestion
-  
 ```
+:run function may be a scheduler' :run function. It also may be a combination of a scheduler' :run function and one or more middleware' :run functions. The combination and injection from scheduler.core's scheduler and middleware :run function to schedule request's :run function is processed by defsch macro. This field is added by defsch macro automatic.
+
 * :update : A schedule update configures function after :fun function which takes a schedule map and a grant map parameters and returns a new schedule map. like:
 ```
 (fn [sc           ;Old scheduler map
      gnt]         ;Grant map
   new-sc-map)
 ```
+:updare is same with :run that combination and injection by defsch macro. This field is added by defsch macro automatic.
 
-For simplly description, a custom scheduler should classify parameters with below types:
-- RD: Used by 'run' function and defined by 'defsch' macro in sch-cfg-map.
-- RI: Used by 'run' function and created in 'run' function inner. Need not defined.
-- UD: Used by 'update' function and defined by 'defsch' macro in sch-cfg-map.
-- RR: Used by 'run' function and defined by 'request' or 'request-grp' macro
+* subs: A vector of sub-node. This field is added by defsch macro automatically for none leaflet node. Added by request function for leaflet node.
 
+## Schedule Grant
+':run' function translates schedule request map into grant map. In this process, 'runsch' macro will remove :subs field and all function fields from req map and ':run' function will append below fields:
+* req: Grant priority. 0 means invalid grant. It is also used for parent node scheduling.
+* lvl: Scheduler level for hierachy scheduler from request node.
+* index: The position of grant in all requests
+Beside these, scheduler.core bypass all others fields to grant map. Note that ':run' function may append other field for some extend feature.
 
-Scheduler uses special scheduler DSL syntax descripted a scheduler.
+# Scheduler.core
+Scheduler.core uses below componments to form a schedule tree.
 
+## Scheduler 
+A scheduler is a map represented a schedule process action and should include :run and :update fields (Refer to Schedule Request section).
+Scheduler.core provides some standard scheduler. The user can custom and build new scheduler by self.
+
+## Middleware
+A extend wrap of scheduler is used to expand features of basic scheduler. A middleware is a function which takes a scheduler as sole parameter and return a map who has the same format and fileds (:run and :update) with a scheduler.
+
+## params-map
+Configured variables and process temporary variables for scheduler or middleware. 
+
+## Hierachy Scheduler DSL
+Scheduler.core uses special scheduler DSL syntax descripted a hierachy scheduler.
 Syntax: sch-dsl ::= [sch sch-cfg-map <middleware middleware-cfg-map ...> <sub-sch-dsl>]
 Where:
 * sch: A name of scheduler
-* sch-cfg-map: A map for configure value of a scheduler. The keyword is dependent with scheduler and detail please refer to
-               scheduler parameter definition document (RD and UD types).
+* sch-cfg-map: A map for configure value of a scheduler. The keyword is dependent with scheduler and detail please refer to scheduler parameter definition document (RD and UD types).
 * middleware: Middleware symbol for extend function
 * sub-sch-dsl: Sub-scheduler define. It has the same syntax with sch-dsl
+
+Scheduler.core uses this special DSL to build a hierachy schedule tree map who's node is a schedule request map except leaflet node's request.
 
 
 ### defsch macro
 defsch macro translates scheduler DSL into map structure which include follow fields:
-
 * :subs : Sub requestions vector. There are three formats for subs:
 ** Number vector: A vector includes one or more requestions which represented by a priority number. likes: [1 2 0 3 4 1]
 ** Request map vector: A map vector who includes a :req request priority number value at least. likes: [{:req 1} {:req 3}]
 ** Sub schedule map format: A sub scheduler map vector.
-
 * Others configure fields is maped into this scheduler map. 
 
 # API
@@ -99,7 +93,6 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   * backpressure: {:bp}
 
 # Example
-
 ## Example-Simple WRR scheduler application
 ```
 (defsch sc [wrr])   ;Define a WRR scheduler named sc
@@ -114,12 +107,14 @@ defsch macro translates scheduler DSL into map structure which include follow fi
 (request sc [0] [0 1 1 1])
 (request sc [1] [0 0 1 1])
 (def gnt (schedule sc))
-```"}
+```
+
+"}
   scheduler.core)
   
 
 (defmacro sch
-  "Creates a scheduler map using scheduler DSL by scs."
+  "Create and return a schedule request tree from schedule DSL 'scs'. It is simular with fn macro."
   ([scs] `(sch ~scs 0))
   ([scs lvl]
    (let [funs (->> scs (filter symbol?))
@@ -130,29 +125,29 @@ defsch macro translates scheduler DSL into map structure which include follow fi
      `(  into ~rst ~func))))
 
 (defmacro defsch
-  "Define and create a scheduler map from scheduler DSL by scs named with name. Note: name is a atom structure."
+  "Define and create a scheduler map from scheduler DSL by scs named with name. Note: name is a atom structure. It is simular with defn macro."
   [name scs]
   `(def ~name (atom (sch ~scs))))
 
 (defn runsch
   "Recurrently run ':run' functions among all sub nodes and return a grant."
-  [sc]
+  [ts sc]
   (let [gnt (if (map? sc)
               (if-let [{:keys [run subs req]} sc]   ;== ConditionA: 当前请求节点非叶子节点，并且包含优先级信息
                 (if (pos? req)
-                  (let [{:keys [req] :as gnt} (apply run sc subs)]  ;调度子节点
+                  (let [{:keys [req] :as gnt} (apply run ts sc subs)]  ;调度子节点
                     (if (pos? req)
                       (assoc gnt :req req)    ;子调度有Grant，则修改优先级
                       gnt))   ;若子调度返回无Grant，则返回无Grant
                   sc)   ;若当前节点优先级信息为“无请求”，则直接返回当前节点
                 (if-let [{:keys [run subs]}]  ;== ConditionB: 当前请求节点非叶子节点，但不包含优先级信息
-                  (apply run sc subs)   ;
+                  (apply run sc ts subs)   ;
                   (if-let [{:keys [req]} sc]  ;== ConditionC: 当前请求节点为叶子节点，包含优先级信息
                     sc  ;子节点，直接透传优先级
                     ;== ConditionD
                     (throw (Exception. (str "Schedule request node |" sc "| should have :req field or :run and :subs field."))))))
               (throw (Exception. (str "Schedule request node |" sc "| is not a map format."))))]
-    (dissoc gnt :run :subs)))  ;Grant中不需要的域删除)
+    (dissoc gnt :run :update :subs)))  ;Grant中不需要的域删除)
   ; (cond
   ;   (number? sc) {:pri sc}    ;若调度节点为<数字>，则把该数字的值当作grant返回
   ;   (contains? sc :req) (into sc {:pri (:req sc)})
@@ -172,28 +167,29 @@ defsch macro translates scheduler DSL into map structure which include follow fi
       curr-node)))
 
 (defn schedule
-  "Runs schedule request node 'sc' one time (call runsch function), update sc and return grant map."
-  [sc]
-  (let [gnt (runsch @sc)]
-    (swap! sc upsch gnt)
-    gnt))
+  "Runs schedule request node 'sc' one time (call runsch function), update sc and return a grant map. 'ts' is a optional parameter who represents the run time from program start and it is usefull for shaper and any other time-based scheduler."
+  ([sc] (schedule sc 0))
+  ([sc ts]
+    (let [gnt (runsch @sc ts)]
+      (swap! sc upsch gnt)
+      gnt)))
+
 
 (defn request
   "Modify the scheduler sc's request fields where hierachy is pos vector."
-  ([sc pos req]
-   (let [v (interpos :subs pos)
-           v (cons :subs v)]
-     (swap! sc assoc-in v req))))
-
-
-(defn request-grp
-  "Modify the scheduler sc's request fields where hierachy is pos vector."
   ([sc req]
-   (swap! sc [:subs] req))
+   (swap! sc [:subs]
+      (map #(cond (number? %) {:req %}
+                  (contains? % :req) %
+                  :else (throw (Exception. (str "Invalid leaflet schedule request format.")))
+            ) req)))
   ([sc pos req]
-   (let [v (interpos :subs pos)
-           v (cons :subs v)
-           v (conj v :subs)]
+   (let [req (cond (number? req) {:req req}
+                   (contains? req :req) req
+                   :else (throw (Exception. (str "Invalid leaflet schedule request format."))))
+         v (interpos :subs pos)
+         v (cons :subs v)
+         v (conj v :subs)]
      (swap! sc assoc-in v req))))
 
 ;=============================================================================================================
@@ -211,6 +207,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
            wgts weights
            get-ptr (fn [sch-cfg-map gnt] (get (get sch-cfg-map ptrs [0]) (get gnt :pri 0) 0))}
       :as sch-cfg-map} 
+    ts
     & nodes]
    (let [nodes-num (count nodes)    ;获取请求节点个数
          max-ptr (rem (get-ptr sch-cfg-map {:pri max-req}) nodes-num)   ;获取最高优先级指针
@@ -235,7 +232,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
                wrr-reload-time (wrr-weight-reload-time wgt weight)    ;计算当前节点需要reload的时间。
                last-reload-time (get rst-gnt :wrr-reload-time)        ;获取上一个选中的节点的reload时间
                ;生成调度结果
-               {:keys [req] :as gnt} (into (runsch node) {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
+               {:keys [req] :as gnt} (into (runsch ts node) {:sub gnt :index index :wrr-reload-time wrr-reload-time})
               ;  {:keys [pri] :as gnt} (->  gnt 
               ;                             (into {:sub gnt :lvl lvl :index index :wrr-reload-time wrr-reload-time})
               ;                             (into (->>  node
@@ -378,7 +375,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
     Return the node who is desided."
   [handler]
   {:run
-    (fn [{:keys [calendar-ptr calendar-tbl lvl] :as cfg} & nodes]
+    (fn [{:keys [calendar-ptr calendar-tbl lvl] :as cfg} ts & nodes]
       (let [{:keys [pri-changes] :or {pri-changes (vec (repeat (count nodes) 0))}} (get calendar-tbl calendar-ptr 0)
             nodes (map (fn [node change] 
                         (cond (number? node) (+ node change)
@@ -404,11 +401,60 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   * bp: Backpressure flag. Assert backpressure when bp > 0."
   [handler]
   {:run
-    (fn [{:keys [bp lvl] :as cfg} & nodes]
+    (fn [{:keys [bp lvl] :as cfg} ts & nodes]
       (if (pos? bp)
-        {:pri 0 :index 0 :lvl 0}
-        (apply (get handler :run) cfg nodes)))
+        (apply (get handler :run) (assoc cfg :req 0) ts nodes)
+        (apply (get handler :run) cfg ts nodes)))
    :update
     (fn [sc gnt]
       ((get handler :update) sc gnt))})
+
+
+(defn shaper
+  "# Introduce
+  Shaper Middleware.
+  Shaper is like a filter.
+
+  The symbol of shaper is show below:
+
+                                    |  (shp-pir-func ts sc)
+                                    |
+                            ------------------
+                            \                /
+              orignal req    \              /
+                    -------->>\  shp-token /------------>>  Turn on when shp-token>0
+                               \----------/
+                                \++++++++/
+                                 --------
+                                    |
+                                    |  (shp-dec-func sc gnt)
   
+  # Parameters:
+  * shp-token: Token of shaper. Default is 100. Used for :run, defined by DSL
+  * shp-ts: Ts value of last update token. Default is 0. Used for :run and :update, defined by DSL
+  * shp-pir-func: Increasing token action. Default is #(- %1 (get %2 :shp-ts 0)). The syntax is: (ts sc)=>inc-token-value. Used for :run and defined by DSL
+  * shp-dec-func: Decreasing token action. The syntax is: (sc gnt)=>dec-token-value. Default is (constantly 1). Used for :update and defined by DSL
+  * shp-cbs: Max value of shp-token. Default is 100. Used for :update and defiend by DSL.
+  * shp-dfs: Min value of shp-token. Default is 100. Used for :update and defiend by DSL. Note this value should be a minus number.
+
+  "
+  [handler]
+  {:run
+    (fn [{:keys [shp-token shp-ts shp-pir-func] 
+          :or {shp-token 100 shp-ts 0 shp-pir-func #(- %1 (get %2 :shp-ts 0))} 
+          :as cfg} 
+         ts & nodes]
+      (let [new-token (+ shp-token (shp-pir-fun ts cfg))
+            new-cfg (if (pos? new-token) cfg (assoc cfg :req 0))
+            new-cfg (assoc new-cfg :shp-token new-token :shp-ts ts)]
+        (apply (get handler :run) new-cfg ts nodes)))
+   :update
+    (fn [{:keys [shp-token shp-dec-func shp-cbs shp-dfs] 
+          :or {shp-dec-func (constantly 1) shp-cbs 100 shp-dfs -100}
+          :as sc} 
+         gnt]
+      (let [dec-token (shp-dec-func sc gnt)
+            new-token (- shp-token dec-token)
+            new-token (if (> new-token shp-cbs) shp-cbs new-token)
+            new-token (if (< new-token shp-dfs) shp-dfs new-token)]
+        ((get handler :update) (assoc sc :shp-token new-token) gnt)))})  
