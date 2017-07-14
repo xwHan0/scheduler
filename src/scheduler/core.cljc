@@ -368,15 +368,14 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   * nodes: request node map. Must include :req field. The value ok :req represents request content.
              0 means None request and position means a valid request. The value of request represents 
              the request priority. e.g. 7 > 3
-  * calendar-ptr: The TDM pointer for calendar configure table (calendar-tbl).
   * calendar-tbl: The schedule configure table which includes 3 fields:
   
   ### Return
     Return the node who is desided."
   [handler]
   {:run
-    (fn [{:keys [calendar-ptr calendar-tbl lvl] :as cfg} ts & nodes]
-      (let [{:keys [pri-changes] :or {pri-changes (vec (repeat (count nodes) 0))}} (get calendar-tbl calendar-ptr 0)
+    (fn [{:keys [calendar-tbl lvl] :as cfg} ts & nodes]
+      (let [{:keys [pri-changes] :or {pri-changes (vec (repeat (count nodes) 0))}} (get calendar-tbl (rem ts (count calendar-tbl)) 0)
             nodes (map (fn [node change] 
                         (cond (number? node) (+ node change)
                               (contains? node :req) (update node :req + change)
@@ -388,11 +387,8 @@ defsch macro translates scheduler DSL into map structure which include follow fi
         ;      :else {:pri 0 :index 0 :lvl lvl :calendar? true})
         ))
    :update
-    (fn [{:keys [calendar-ptr calendar-tbl] :as sc} gnt]
-      (let [next-ptr (-> calendar-ptr inc (rem (count calendar-tbl)))]
-        (if (and (->> gnt :pri pos?) (->> gnt :calendar? not))
-          (assoc ((get handler :update) sc gnt) :calendar-ptr next-ptr)
-         (assoc sc :calendar-ptr next-ptr))))})
+    (fn [{:keys [] :as sc} gnt]
+      ((get handler :update) sc gnt))})
 
 (defn backpressure
   "## Backpressure Middleware.
