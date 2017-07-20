@@ -9,6 +9,20 @@
 "}
   scheduler.middleware)
   
+(defn counter []
+  (let [cnt (atom 0)]
+    (fn 
+      ([thd]
+        (swap! cnt inc)
+        (let [rst (>= @cnt thd)]
+          (if rst (reset! cnt 0))
+          rst))
+      ([thd dec-func & params]
+        (swap! cnt - (apply dec-func params))
+        (let [rst (>= @cnt thd)]
+          (if rst (reset! cnt 0))
+          rst)))))
+
 
 (defn calendar
   "# Introduce:
@@ -49,86 +63,21 @@
     (fn [{:keys [] :as sc} gnt]
       ((get handler :update) sc gnt))})
 
-(defn backpressure
+ 
+        
+        
+(defn continous
   "## Backpressure Middleware.
   
   ### Parameters:
   * bp: Backpressure flag. Assert backpressure when bp > 0."
-  [handler]
-  {:run
-    (fn [{:keys [bp lvl] :as cfg} ts & nodes]
-      (if (pos? bp)
-        (apply (get handler :run) (assoc cfg :req 0) ts nodes)
-        (apply (get handler :run) cfg ts nodes)))
-   :update
-    (fn [sc gnt]
-      ((get handler :update) sc gnt))})
-
-
-(defn shaper
-  "# Introduce
-  Shaper Middleware.
-  Shaper is like a filter.
-
-  The symbol of shaper is show below:
-
-                                    |  (shp-pir-func ts sc)
-                                    |
-                            ------------------
-                            \                /
-              orignal req    \              /
-                    -------->>\  shp-token /------------>>  Turn on when shp-token>0
-                               \----------/
-                                \++++++++/
-                                 --------
-                                    |
-                                    |  (shp-dec-func sc gnt)
-  
-  # Parameters:
-  * shp-token: Token of shaper. Default is 100. Used for :run, defined by DSL
-  * shp-ts: Ts value of last update token. Default is 0. Used for :run and :update, defined by DSL
-  * shp-pir-func: Increasing token action. Default is #(- %1 (get %2 :shp-ts 0)). The syntax is: (ts sc)=>inc-token-value. Used for :run and defined by DSL
-  * shp-dec-func: Decreasing token action. The syntax is: (sc gnt)=>dec-token-value. Default is (constantly 1). Used for :update and defined by DSL
-  * shp-cbs: Max value of shp-token. Default is 100. Used for :update and defiend by DSL.
-  * shp-dfs: Min value of shp-token. Default is 100. Used for :update and defiend by DSL. Note this value should be a minus number.
-
-  "
-  [handler]
-  {:run
-    (fn [{:keys [shp-token shp-ts shp-pir-func] 
-          :or {shp-token 100 shp-ts 0 shp-pir-func #(- %1 (get %2 :shp-ts 0))} 
-          :as cfg} 
-         ts & nodes]
-      (let [new-token (+ shp-token (shp-pir-fun ts cfg))
-            new-cfg (if (pos? new-token) cfg (assoc cfg :req 0))
-            new-cfg (assoc new-cfg :shp-token new-token :shp-ts ts)]
-        (apply (get handler :run) new-cfg ts nodes)))
-   :update
-    (fn [{:keys [shp-token shp-dec-func shp-cbs shp-dfs] 
-          :or {shp-dec-func (constantly 1) shp-cbs 100 shp-dfs -100}
-          :as sc} 
-         gnt]
-      (let [dec-token (shp-dec-func sc gnt)
-            new-token (- shp-token dec-token)
-            new-token (if (> new-token shp-cbs) shp-cbs new-token)
-            new-token (if (< new-token shp-dfs) shp-dfs new-token)]
-        ((get handler :update) (assoc sc :shp-token new-token) gnt)))})  
-        
-        
-        (defn backpressure
-  "## Backpressure Middleware.
-  
-  ### Parameters:
-  * bp: Backpressure flag. Assert backpressure when bp > 0."
-  [handler]
-  {:run
-    (fn [{:keys [bp lvl] :as cfg} ts & nodes]
-      (if (pos? bp)
-        (apply (get handler :run) (assoc cfg :req 0) ts nodes)
-        (apply (get handler :run) cfg ts nodes)))
-   :update
-    (fn [sc gnt]
-      ((get handler :update) sc gnt))})
+  [name trigle-pred finish-pred]
+  (let [id (keyword (str "ctn_" name))]
+    (fn [handler]
+      {:run (fn [cfg ts & nodes])
+       :update (fn [sc gnt]
+                 (if (and (= :NORM (-> sc id :sta)) trigle)))}))
+  )
 
 
         

@@ -4,18 +4,18 @@
 
 
 # Introduce
-Scheduler is a selector which decides one from a sequence collection using some strategy like find and search functions. 
+Scheduler is a selector which decides one from a set of nodes which stored in a sequence collection through some strategy like find and search functions. 
 
 A scheduler can be orgnized by more than one sub-scheduler to form a hierachy scheduler tree. Every none-leaflet node processes decide or selection among all sub nodes through a customed schedule algorithm.
 
-## Schedule Request
-For leaflet node, there are two scheduler describes format it as follow:
-* <number>: The request priority. Zero is none request, the more of value represents priority.
-* map: Includes below fields:
- - req: The request priority. Zero is none request, the more of value represents priority.
+## Schedule Node
 
-The none-leaflet node's format is a map which includes below field at least:
-* req<optional>: The request priority. Ingore means the request from :run's grant which is called request bypass. This field is added by user.
+The schedule node is a map data structure who includes below field at least:
+* req<optional>: The request priority.
+ - [1,inf]: Designated priority by user. The larger of the value is the high of priority. e.x. 3>2.
+ - 0: Invalid request.
+ - [-inf,-1]: Bypassed priority from sub scheduler's grant.
+ Ingore means the request from :run's grant which is called request bypass. This field is added by user.
 * lvl: Schedule tree depth. This field is added by defsch macro automatic.
 * run: Schedule process function. The form is: (sch-param-map ts & sub-node) => grant-map, where:
 ```
@@ -117,10 +117,10 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   "Create and return a schedule request tree from schedule DSL 'scs'. It is simular with fn macro."
   ([scs] `(sch ~scs 0))
   ([scs lvl]
-   (let [funs (->> scs (filter symbol?))
+   (let [funs (->> scs (filter (or symbol? list?)))
          cfg (->> scs (filter map?) (into {}))
          subs (->> scs (filter vector?) (map #(list 'sch % (inc lvl))) vec)
-         func (if (< 1 (count funs)) (cons '->> funs) (first funs))
+         func (if (< 1 (count funs)) (cons '-> funs) (first funs))
          rst (assoc cfg :subs subs :lvl lvl)]
      `(  into ~rst ~func))))
 
