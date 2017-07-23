@@ -10,6 +10,28 @@
   scheduler.middleware)
   
 (defn counter []
+  "Closure implementation of counter.
+  
+# Introduce
+It is usefull as a pred function who statistics the times of something.
+
+# Usage
+It takes none parameters and returns a threshold compare function whose syntax is:
+  [thd] => compare-result
+  [thd inc-func & params] => compare-result
+where:
+  - thd: Threshold for compare.
+  - inc-func: A function who take params as parameters and return a increasement quantity for counter. Ignore means a one increasement.
+
+# Example
+
+```
+(def times (counter))
+(if (times 6 + 2) "OK")  ;=> nil
+(if (times 6 + 2) "OK")  ;=> nil
+(if (times 6 + 2) "OK")  ;=> "OK"
+```
+"
   (let [cnt (atom 0)]
     (fn 
       ([thd]
@@ -17,8 +39,8 @@
         (let [rst (>= @cnt thd)]
           (if rst (reset! cnt 0))
           rst))
-      ([thd dec-func & params]
-        (swap! cnt - (apply dec-func params))
+      ([thd inc-func & params]
+        (swap! cnt + (apply inc-func params))
         (let [rst (>= @cnt thd)]
           (if rst (reset! cnt 0))
           rst)))))

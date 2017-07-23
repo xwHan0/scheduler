@@ -61,7 +61,7 @@ Common Scheduler models for ESL in communication fields.
     ([this ts & inc-func] 
       (let [shp (.update this ts (constantly 0) inc-func)]
         (update-in shp [:sta] :BP))))
-  (desset-bp [this] (update-in this [:sta] :NORM))
+  (desset-bp [this] (update-in this [:sta] :NORM)))
 
 (defn create-shp
   ([] (shaper. 0 1 -1 0 :NORM 0))

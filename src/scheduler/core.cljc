@@ -11,12 +11,20 @@ A scheduler can be orgnized by more than one sub-scheduler to form a hierachy sc
 ## Schedule Node
 
 The schedule node is a map data structure who includes below field at least:
+
 * req<optional>: The request priority.
  - [1,inf]: Designated priority by user. The larger of the value is the high of priority. e.x. 3>2.
  - 0: Invalid request.
  - [-inf,-1]: Bypassed priority from sub scheduler's grant.
- Ingore means the request from :run's grant which is called request bypass. This field is added by user.
+ - Ingore means the request from :run's grant which is called request bypass. This field is added by user. runsch maroc bypass the sub nodes' priority and the bypass priority value should be minus.
+ 
 * lvl: Schedule tree depth. This field is added by defsch macro automatic.
+
+
+* index: The position of grant in all requests. :run function processes selection scheduling from all sub nodes and adds this field automatically.
+
+* ts: Add on the process of :run function for schedule result. Note that only decided node's ts field is valid.
+
 * run: Schedule process function. The form is: (sch-param-map ts & sub-node) => grant-map, where:
 ```
 (fn [cfg-param-map    ;scheduler configure map
@@ -37,11 +45,11 @@ The schedule node is a map data structure who includes below field at least:
 
 * subs: A vector of sub-node. This field is added by defsch macro automatically for none leaflet node. Added by request function for leaflet node.
 
+
 ## Schedule Grant
 ':run' function translates schedule request map into grant map. In this process, 'runsch' macro will remove :subs field and all function fields from req map and ':run' function will append below fields:
-* req: Grant priority. 0 means invalid grant. It is also used for parent node scheduling.
-* lvl: Scheduler level for hierachy scheduler from request node.
-* index: The position of grant in all requests
+
+
 Beside these, scheduler.core bypass all others fields to grant map. Note that ':run' function may append other field for some extend feature.
 
 # Scheduler.core
@@ -132,21 +140,23 @@ defsch macro translates scheduler DSL into map structure which include follow fi
 (defn runsch
   "Recurrently run ':run' functions among all sub nodes and return a grant."
   [ts sc]
-  (let [gnt (if (map? sc)
-              (if-let [{:keys [run subs req]} sc]   ;== ConditionA: 当前请求节点非叶子节点，并且包含优先级信息
-                (if (pos? req)
-                  (let [{:keys [req] :as gnt} (apply run ts sc subs)]  ;调度子节点
-                    (if (pos? req)
-                      (assoc gnt :req req)    ;子调度有Grant，则修改优先级
-                      gnt))   ;若子调度返回无Grant，则返回无Grant
-                  sc)   ;若当前节点优先级信息为“无请求”，则直接返回当前节点
-                (if-let [{:keys [run subs]}]  ;== ConditionB: 当前请求节点非叶子节点，但不包含优先级信息
-                  (apply run sc ts subs)   ;
-                  (if-let [{:keys [req]} sc]  ;== ConditionC: 当前请求节点为叶子节点，包含优先级信息
-                    sc  ;子节点，直接透传优先级
-                    ;== ConditionD
-                    (throw (Exception. (str "Schedule request node |" sc "| should have :req field or :run and :subs field."))))))
-              (throw (Exception. (str "Schedule request node |" sc "| is not a map format."))))]
+  (let [{:keys [run subs req]} sc  ;Parse sc map
+        gnt (cond (not (map? sc)) (throw (Exception. (str "Schedule node |" sc "| is not a map format.")))
+                  (and (nil? run) (nil? subs) (nil? req)) (throw (Exception. (str "Schedule node |" sc "| do not include :run, :subs and :req fields.")))
+                  (and (not (nil? run)) (nil? subs)) (throw (Exception. (str "Schedule none-leaflet node |" sc "| has not :subs field.")))
+                  (and (not (nil? subs)) (nil? run)) (throw (Exception. (str "Schedule none-leaflet node |" sc "| has not :run field.")))
+                  (and (not (nil? run)) (not (fn? run))) (throw (Exception. (str "Schedule none-leaflet node |" sc "| should have a fn type of :run.")))
+                  )
+        req (if (neg? req) nil req)
+        gnt (if (zero? req) sc)
+        gnt (if (fn? run)
+              (apply run ts sc subs)
+              sc)
+        ;Bypass priority and append ts
+        gnt (cond (zero? (:req gnt)) (assoc gnt :ts ts)
+                  (pos? req) (assoc gnt :req req)
+                  :else (assoc gnt :ts ts))
+        ]
     (dissoc gnt :run :update :subs)))  ;Grant中不需要的域删除)
   ; (cond
   ;   (number? sc) {:pri sc}    ;若调度节点为<数字>，则把该数字的值当作grant返回
@@ -167,12 +177,23 @@ defsch macro translates scheduler DSL into map structure which include follow fi
       curr-node)))
 
 (defn schedule
-  "Runs schedule request node 'sc' one time (call runsch function), update sc and return a grant map. 'ts' is a optional parameter who represents the run time from program start and it is usefull for shaper and any other time-based scheduler."
+  "Runs schedule request node 'sc' one time (call runsch function), update sc and return a grant map. 
+  
+  * parameters:
+    - sc: Schedule tree root node atom.
+    - ts<optional>: The run time from program start. It is usefull for shaper and any other time-based scheduler elements.
+  * Return:
+    Schedule result (Grant). It has two result format configured via rst-fmt parameter: 
+    - Hierachy format (:HIER): A vector of schedule level result map and indexed with schedule level.
+    - Leaflet map format (:LEAF,Default): Just leaflet schedule level result is returned. 
+    Note: The :run, :update and :subs will be removed from result by schedule function.
+    "
   ([sc] (schedule sc 0))
-  ([sc ts]
+  ([sc ts] (schedule sc ts :LEAF))
+  ([sc ts rst-fmt]
     (let [gnt (runsch @sc ts)]
       (swap! sc upsch gnt)
-      gnt)))
+      (grant @sc rst-fmt))))
 
 
 (defn request
