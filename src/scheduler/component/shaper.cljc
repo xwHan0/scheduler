@@ -39,35 +39,41 @@ Common Scheduler models for ESL in communication fields.
 (defprotocol IShaper
   "Standard shaper operations."
   (update [this ts dec-func & inc-func])
-  (asset-bp [this] [this ins-func])
-  (desset-bp [this])
   (threshold [this thds]))
   
-(defrecord shaper [pir bes dfs token sta ts]
+(defrecord shp [pir cbs dfs tk ts pir-rate])
+  
+(extend shp
   IShaper
-  (update
-    ([this ts dec-func & inc-func]
-      (let [ts-diff (- ts (:ts this))
-            tk-inc (cond (not= (:sta this) :NORM) 0
+  {:update
+    (fn update 
+      ([this nts flowctrl] (update this nts 0 flowctrl))
+      ([{:keys [ts tk pir-rate pir cbs dfs] 
+         :as this} 
+        nts dec-tk flowctrl 
+        & inc-func]
+        (let [ts-diff (- nts @ts)
+            tk-inc (cond (zero? @pir-rate) 0
                          inc-func (inc-func this ts-diff)
-                         :else (* ts-diff (:pir this)))
-            tk (- (+ (:token this) tk-inc) (dec-func))
-            tk (min (:bes this) tk)
-            tk (max (:dfs this) tk)
-            shp (update-in this [:token] tk)
-            shp (update-in shp [:ts] ts)]
+                         :else (* ts-diff pir @pir-rate))
+            tk (- (+ @tk tk-inc) dec-tk)
+            tk (min @cbs tk)
+            tk (max @dfs tk)
+            shp (swap! this assoc :tk tk)
+            shp (swap! this assoc :ts ts)
+            shp (swap! this assoc :pir-rate flowctrl)
+            ]
         shp)))
-  (asset-bp
-    ([this ts & inc-func] 
-      (let [shp (.update this ts (constantly 0) inc-func)]
-        (update-in shp [:sta] :BP))))
-  (desset-bp [this] (update-in this [:sta] :NORM)))
+   })
 
-(defn create-shp
-  ([] (shaper. 0 1 -1 0 :NORM 0))
-  ([pir] (shaper. pir 1 -1 0 :NORM 0))
-  ([pir bes] (shaper. pir bes -1 0 :NORM 0))
-  ([pir bes dfs] (shaper. pir bes dfs 0 :NORM 0)))
+
+;pir cbs dfs tk ts pir-rate]
+(defn shaper
+  ([& {:keys [pir cbs dfs] 
+       :or {pir 0 cbs 9999999 dfs 0}}] 
+    (shp. pir cbs dfs (atom 0) (atom 0) (atom 1)))
+  ([pir cbs] (shp. pir cbs 0 atom 0) (atom 0) (atom 1)))
+  ([pir cbs dfs] (shp. pir cbs dfs atom 0) (atom 0) (atom 1))))
 
 
 

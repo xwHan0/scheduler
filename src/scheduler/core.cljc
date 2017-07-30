@@ -157,7 +157,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
                   (pos? req) (assoc gnt :req req)
                   :else (assoc gnt :ts ts))
         ]
-    (dissoc gnt :run :update :subs)))  ;Grant中不需要的域删除)
+    gnt))  ;Grant中不需要的域删除)
   ; (cond
   ;   (number? sc) {:pri sc}    ;若调度节点为<数字>，则把该数字的值当作grant返回
   ;   (contains? sc :req) (into sc {:pri (:req sc)})
@@ -165,7 +165,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   ;   (contains? sc :run) (apply (get sc :run) sc (get sc :subs))
   ;   :else (throw (Exception. (str sc " is not a valid request format."))))
 
-(defn- upsch
+(defn upsch
   [sc gnt]
   (let [curr-node ((get sc :update) sc gnt)
         index (get gnt :index)
@@ -175,6 +175,21 @@ defsch macro translates scheduler DSL into map structure which include follow fi
     (if sub?
       (assoc-in curr-node [:subs index] sub-sc)
       curr-node)))
+
+(defn grant [sc rst-fmt gnt-default]
+  (let [gnt-iter (fn gnt-iter [sc gnt]
+                   (if-let [{:keys [subs index]} sc]
+                     (gnt-let (get subs index) (cons (dissoc sc :run :update :subs) gnt))
+                     (cons (dissoc sc :run :update :subs) gnt)))
+     
+        gnt (if (pos? (:index sc))
+              (gnt-iter sc [])
+              gnt-default)
+        gnt (if (= :HIRE rst-fmt)
+              gnt
+              (last gnt))
+        ]
+    gnt))
 
 (defn schedule
   "Runs schedule request node 'sc' one time (call runsch function), update sc and return a grant map. 
@@ -193,7 +208,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
   ([sc ts rst-fmt]
     (let [gnt (runsch @sc ts)]
       (swap! sc upsch gnt)
-      (grant @sc rst-fmt))))
+      (grant @sc rst-fmt []))))
 
 
 (defn request
