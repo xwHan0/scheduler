@@ -179,7 +179,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
 (defn grant [sc rst-fmt gnt-default]
   (let [gnt-iter (fn gnt-iter [sc gnt]
                    (if-let [{:keys [subs index]} sc]
-                     (gnt-let (get subs index) (cons (dissoc sc :run :update :subs) gnt))
+                     (gnt-iter (get subs index) (cons (dissoc sc :run :update :subs) gnt))
                      (cons (dissoc sc :run :update :subs) gnt)))
      
         gnt (if (pos? (:index sc))
@@ -223,7 +223,7 @@ defsch macro translates scheduler DSL into map structure which include follow fi
    (let [req (cond (number? req) {:req req}
                    (contains? req :req) req
                    :else (throw (Exception. (str "Invalid leaflet schedule request format."))))
-         v (interpos :subs pos)
+         v []   ; (interpos :subs pos)
          v (cons :subs v)
          v (conj v :subs)]
      (swap! sc assoc-in v req))))
