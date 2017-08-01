@@ -38,7 +38,7 @@ Common Scheduler models for ESL in communication fields.
 
 (defprotocol PCounter
   "Define stardand counter operators."
-  (decrease [this value] [this value max-val] [this value max-val min-val]
+  (decrease [this value] [this value cfg]
     "
     ## Parameters
     * args: Extends parameters list. Includes:
@@ -52,33 +52,71 @@ Common Scheduler models for ESL in communication fields.
         * If cnt is belong in [80, 100) => 2
         * else => 3
     "))
+    
+(defn decrease [cnt dec-value & {:keys [min-val max-val]}]
+  (let [new-cnt (- cnt dec-value)
+        new-cnt (if max-val (min max-val new-cnt) new-cnt)
+        new-cnt (if min-val (max min-val new-cnt) new-cnt)]
+    new-cnt))
+
+(defn threshold [cnt thds]
+  (let [thds (cond  (sequential? thds) thds 
+                    (number? thds) [thds]
+                    :else (throw (Exception. (str "Parameter: |" thds "| is not a valid thds format."))))
+        thds (->> thds sort (map #(vector %2 (inc %1)) (range)))
+        thd (->> thds (filter #(>= cnt (first %))) last second)]
+    (if thd thd 0)))
 
 (defrecord counter [cnt])
 
 (extend counter
   PCounter
   { :decrease 
-      (fn [{:keys [cnt] :as this} value & args]
-        (let [new-cnt (- cnt value)
-              arg-len (count args)
-              max-val (if (>= arg-len 1) (first args))
-              min-val (if (>= arg-len 2) (second args))
-              new-cnt (if max-val (min max-val new-cnt) new-cnt)
-              new-cnt (if min-val (max min-val new-cnt) new-cnt)]
+      (fn [{:keys [cnt] :as this} value & cfg]
+        (let [new-cnt (decrease cnt value cfg)]
           (counter. new-cnt)))
 
     :threshold
       (fn [{:keys [cnt]} thds]
-        (let [thds (cond  (sequential? thds) thds 
-                          (number? thds) [thds]
-                          :else (throw (Exception. (str "Parameter: |" thds "| is not a valid thds format."))))
-              thds (->> thds sort (map #(vector %2 (inc %1)) (range)))
-              thd (->> thds (filter #(>= cnt (first %))) last second)]
-          (if thd thd 0)))})
+        (threshold cnt thds))})
 
 (defn new-counter
   ([] (->counter 0))
   ([init] (->counter init)))
+  
+  
+;
+(defprotocol PShaper
+  (update [this nts cfg] [this nts cfg dec-tk])
+  (flowctrl [this fc]))
+
+(defrecord shaper [tk rate ts])
+
+(extend shaper
+  PCounter
+  {:decrease
+     (fn [{:keys [tk rate ts]} dec-val & {:keys [min-val max-val pir] :as cfg}]
+       (shaper. (decrease tk dec-val cfg) rate ts))
+   :threshold
+     (fn [{:keys [tk rate]} thds]
+       (if (zero? rate) 0 (threshold tk thds)))}
+  PShaper
+  {:update
+     (fn [{:keys [tk rate ts] :as this} nts {:keys [pir] :as cfg}]
+       (if (zero? rate)
+         (shaper. tk rate nts)
+         (let [new-tk (- ts nts)
+               new-tk (* pir rate new-tk)
+               new-tk (decrease new-tk new-tk cfg)]
+           (shaper. new-tk rate nts))))
+   :flowctrl
+     (fn [{:keys [tk rate ts] :as this} fc]
+   ;    (if (zero? fc)
+   ;      (update-shaper this nts))
+       (shaper. tk fc ts))})
+
+(defn new-shaper
+  ([] (->shaper. 0 1 0)))
   
 ; (extend shp
 ;   IShaper
