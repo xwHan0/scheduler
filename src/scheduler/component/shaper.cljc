@@ -38,14 +38,14 @@ Common Scheduler models for ESL in communication fields.
 
 (defprotocol PCounter
   "Define stardand counter operators."
-  (decrease [this value] [this value cfg]
+  (Decrease [this value & cfgs]
     "
     ## Parameters
     * args: Extends parameters list. Includes:
       - args[0]: Max value of counter.
       - args[1]: Min value of counter. 
     ")
-  (threshold [this thds]
+  (Threshold [this thds]
     " - thds: One or more thresholds. For example thds is [50 80 100]:
         * If cnt is belong in (-inf, 50)  => 0
         * If cnt is belong in [50, 80) => 1
@@ -53,8 +53,12 @@ Common Scheduler models for ESL in communication fields.
         * else => 3
     "))
     
-(defn decrease [cnt dec-value & {:keys [min-val max-val]}]
-  (let [new-cnt (- cnt dec-value)
+(defn decrease [cnt dec-value & args]
+  (let [cfg (if (map? (first args))
+              (first args)
+              (apply hash-map args))
+        {:keys [min-val max-val]} cfg
+        new-cnt (- cnt dec-value)
         new-cnt (if max-val (min max-val new-cnt) new-cnt)
         new-cnt (if min-val (max min-val new-cnt) new-cnt)]
     new-cnt))
@@ -71,12 +75,12 @@ Common Scheduler models for ESL in communication fields.
 
 (extend counter
   PCounter
-  { :decrease 
-      (fn [{:keys [cnt] :as this} value & cfg]
-        (let [new-cnt (decrease cnt value cfg)]
+  { :Decrease 
+      (fn [{:keys [cnt] :as this} value & cfgs]
+        (let [new-cnt (apply decrease cnt value cfgs)]
           (counter. new-cnt)))
 
-    :threshold
+    :Threshold
       (fn [{:keys [cnt]} thds]
         (threshold cnt thds))})
 
@@ -87,21 +91,21 @@ Common Scheduler models for ESL in communication fields.
   
 ;
 (defprotocol PShaper
-  (update [this nts cfg] [this nts cfg dec-tk])
-  (flowctrl [this fc]))
+  (Update [this nts cfg] [this nts cfg dec-tk])
+  (Flowctrl [this fc]))
 
 (defrecord shaper [tk rate ts])
 
 (extend shaper
   PCounter
-  {:decrease
-     (fn [{:keys [tk rate ts]} dec-val & {:keys [min-val max-val pir] :as cfg}]
-       (shaper. (decrease tk dec-val cfg) rate ts))
-   :threshold
+  {:Decrease
+     (fn [{:keys [tk rate ts]} dec-val & cfgs]
+       (shaper. (apply decrease tk dec-val cfgs) rate ts))
+   :Threshold
      (fn [{:keys [tk rate]} thds]
        (if (zero? rate) 0 (threshold tk thds)))}
   PShaper
-  {:update
+  {:Update
      (fn [{:keys [tk rate ts] :as this} nts {:keys [pir] :as cfg}]
        (if (zero? rate)
          (shaper. tk rate nts)
@@ -109,46 +113,12 @@ Common Scheduler models for ESL in communication fields.
                new-tk (* pir rate new-tk)
                new-tk (decrease new-tk new-tk cfg)]
            (shaper. new-tk rate nts))))
-   :flowctrl
+   :Flowctrl
      (fn [{:keys [tk rate ts] :as this} fc]
    ;    (if (zero? fc)
    ;      (update-shaper this nts))
        (shaper. tk fc ts))})
 
 (defn new-shaper
-  ([] (->shaper. 0 1 0)))
+  ([] (->shaper 0 1 0)))
   
-; (extend shp
-;   IShaper
-;   {:update
-;     (fn update 
-;       ([this nts flowctrl] (update this nts 0 flowctrl))
-;       ([{:keys [ts tk pir-rate pir cbs dfs] 
-;          :as this} 
-;         nts dec-tk flowctrl 
-;         & inc-func]
-;         (let [ts-diff (- nts @ts)
-;             tk-inc (cond (zero? @pir-rate) 0
-;                          inc-func (inc-func this ts-diff)
-;                          :else (* ts-diff pir @pir-rate))
-;             tk (- (+ @tk tk-inc) dec-tk)
-;             tk (min @cbs tk)
-;             tk (max @dfs tk)
-;             shp (swap! this assoc :tk tk)
-;             shp (swap! this assoc :ts ts)
-;             shp (swap! this assoc :pir-rate flowctrl)
-;             ]
-;         shp)))
-;    })
-
-
-; ;pir cbs dfs tk ts pir-rate]
-; (defn shaper
-;   ([& {:keys [pir cbs dfs] 
-;        :or {pir 0 cbs 9999999 dfs 0}}] 
-;     (shp. pir cbs dfs (atom 0) (atom 0) (atom 1)))
-;   ([pir cbs] (shp. pir cbs 0 atom 0) (atom 0) (atom 1)))
-;   ([pir cbs dfs] (shp. pir cbs dfs atom 0) (atom 0) (atom 1))))
-
-
-
