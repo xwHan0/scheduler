@@ -1,6 +1,6 @@
 (ns scheduler.counter-test
   (:require [scheduler.component.shaper :refer :all]
-            [spyscope.core :refer :all]
+            #_[spyscope.core :refer :all]
             [clojure.test :refer :all]))
 
 (def cnt (->counter 100))
