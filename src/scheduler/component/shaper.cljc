@@ -36,7 +36,7 @@ Common Scheduler models for ESL in communication fields.
   )
   
 
-(defn dec-cnt [cnt dec-value & args]
+(defn dec-cnt [counter dec-value & args]
   (let [{:keys [min-val max-val]   ;Parse configure values
          :as cfg}  ;Parse configure values
             (if (map? (first args))  ;Configured value set
@@ -46,14 +46,16 @@ Common Scheduler models for ESL in communication fields.
         {:keys [cnt ts rate]
          :or {cnt 0 ts 0 rate 1}
          :as counter}
-            (cond (number? cnt) {:cnt cnt}
-                  (map? cnt) cnt
-                  :else (throw (Exception. (str "Invalid counter format |" cnt "|."))))
+            (cond (number? counter) {:cnt cnt}
+                  (map? counter) counter
+                  :else (throw (Exception. (str "Invalid counter format |" counter "|."))))
         
         new-cnt (- cnt dec-value)
         new-cnt (if max-val (min max-val new-cnt) new-cnt)
         new-cnt (if min-val (max min-val new-cnt) new-cnt)]
-    new-cnt))
+    (if (map? counter)
+      (assoc counter :cnt new-cnt)
+      new-cnt)))
 
 (defn threshold [cnt thds]
   (let [thds (cond  (sequential? thds) thds 
