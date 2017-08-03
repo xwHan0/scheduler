@@ -36,6 +36,42 @@ Common Scheduler models for ESL in communication fields.
   )
   
 
+(defn dec-cnt [cnt dec-value & args]
+  (let [{:keys [min-val max-val]   ;Parse configure values
+         :as cfg}  ;Parse configure values
+            (if (map? (first args))  ;Configured value set
+              (first args)   ;
+              (apply hash-map args))   ;Combinite rest parameters into a map data structure
+        
+        {:keys [cnt ts rate]
+         :or {cnt 0 ts 0 rate 1}
+         :as counter}
+            (cond (number? cnt) {:cnt cnt}
+                  (map? cnt) cnt
+                  :else (throw (Exception. (str "Invalid counter format |" cnt "|."))))
+        
+        new-cnt (- cnt dec-value)
+        new-cnt (if max-val (min max-val new-cnt) new-cnt)
+        new-cnt (if min-val (max min-val new-cnt) new-cnt)]
+    new-cnt))
+
+(defn threshold [cnt thds]
+  (let [thds (cond  (sequential? thds) thds 
+                    (number? thds) [thds]
+                    :else (throw (Exception. (str "Parameter: |" thds "| is not a valid thds format."))))
+                    
+        {:keys [cnt rate]
+         :or {rate 1}}
+            (cond (number? cnt) {:cnt cnt}
+                  (map? cnt) cnt
+                  :else (throw (Exception. (str "Invalid counter format |" cnt "|."))))
+        
+        thds (->> thds sort (map #(vector %2 (inc %1)) (range)))
+        thd (->> thds (filter #(>= cnt (first %))) last second)]
+    (cond (zero? rate) 0 
+          thd thd 
+          :else 0)))
+
 (defprotocol PCounter
   "Define stardand counter operators."
   (Decrease [this value & cfgs]
@@ -63,13 +99,7 @@ Common Scheduler models for ESL in communication fields.
         new-cnt (if min-val (max min-val new-cnt) new-cnt)]
     new-cnt))
 
-(defn threshold [cnt thds]
-  (let [thds (cond  (sequential? thds) thds 
-                    (number? thds) [thds]
-                    :else (throw (Exception. (str "Parameter: |" thds "| is not a valid thds format."))))
-        thds (->> thds sort (map #(vector %2 (inc %1)) (range)))
-        thd (->> thds (filter #(>= cnt (first %))) last second)]
-    (if thd thd 0)))
+
 
 (defrecord counter [cnt])
 
@@ -87,6 +117,9 @@ Common Scheduler models for ESL in communication fields.
 (defn new-counter
   ([] (->counter 0))
   ([init] (->counter init)))
+  
+  
+  
   
   
 ;
