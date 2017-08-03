@@ -37,6 +37,16 @@ Common Scheduler models for ESL in communication fields.
   
 
 (defn dec-cnt [counter dec-value & args]
+  "
+  # Introduce
+  Decrease a value of dec-value for counter and return a counter.
+  
+  # Parameters:
+  * counter: Operated counter. These are two formats for counter.
+    - number format: The value of counter.
+    - map format: Includes :cnt field at least.
+     
+  "
   (let [{:keys [min-val max-val]   ;Parse configure values
          :as cfg}  ;Parse configure values
             (if (map? (first args))  ;Configured value set
