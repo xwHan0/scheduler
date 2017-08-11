@@ -35,6 +35,15 @@ Common Scheduler models for ESL in communication fields.
   component.counter
   )
   
+(defn- parse-counter [cnt]
+  (cond (number? cnt) {:cnt cnt :ts 0 :rate 1}
+        (map? cnt) (into {:cnt 0 :ts 0 :rate 1} cnt)
+        :else (throw (Exception. (str "Invalid counter format |" cnt "|.")))))
+
+(defn- parse-config [args]
+  (if (map? (first args))  ;Configured value set
+    (into {:min-val 0 :max-val 9999999999 :cir 1 :recycle? true} (first args))   ;
+    (apply hash-map args)))
 
 (defn dec-cnt [counter dec-value & args]
   "
@@ -47,30 +56,22 @@ Common Scheduler models for ESL in communication fields.
     - map format: Includes :cnt field at least.
      
   "
-  (let [{:keys [min-val max-val]   ;Parse configure values
-         :as cfg}  ;Parse configure values
-            (if (map? (first args))  ;Configured value set
-              (first args)   ;
-              (apply hash-map args))   ;Combinite rest parameters into a map data structure
-        
-        {:keys [cnt ts rate]
-         :or {cnt 0 ts 0 rate 1}
-         :as counter}
-            (cond (number? counter) {:cnt cnt}
-                  (map? counter) counter
-                  :else (throw (Exception. (str "Invalid counter format |" counter "|."))))
-        
+  (let [{:keys [min-val max-val]} (apply parse-config args)
+        {:keys [cnt ts rate]} (parse-counter counter)
         new-cnt (- cnt dec-value)
-        new-cnt (if max-val (min max-val new-cnt) new-cnt)
-        new-cnt (if min-val (max min-val new-cnt) new-cnt)]
+        new-cnt (cond (> new-cnt max-val)
+                        (if recycle?
+                          (+ min-val (- new-cnt max-cnt))
+                          (min max-val new-cnt))
+                      (< new-cnt min-val)
+                        (if recycle?
+                          (- max-val (- min-val new-cnt))
+                          (max min-val new-cnt))
+                      :else new-cnt)]
     (if (map? counter)
       (assoc counter :cnt new-cnt)
       new-cnt)))
 
-(defn- parse-counter [cnt]
-  (cond (number? cnt) {:cnt cnt :ts 0 :rate 1}
-        (map? cnt) (into {:cnt 0 :ts 0 :rate 1} cnt)
-        :else (throw (Exception. (str "Invalid counter format |" cnt "|.")))))
 
 (defn- threshold-stage [cnt thds]
   (let [thds (->> thds (map #(vector %2 (inc %1)) (range)))
