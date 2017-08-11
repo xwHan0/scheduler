@@ -36,53 +36,6 @@ Common Scheduler models for ESL in communication fields.
   )
   
 
-(defn dec-cnt [counter dec-value & args]
-  "
-  # Introduce
-  Decrease a value of dec-value for counter and return a counter.
-  
-  # Parameters:
-  * counter: Operated counter. These are two formats for counter.
-    - number format: The value of counter.
-    - map format: Includes :cnt field at least.
-     
-  "
-  (let [{:keys [min-val max-val]   ;Parse configure values
-         :as cfg}  ;Parse configure values
-            (if (map? (first args))  ;Configured value set
-              (first args)   ;
-              (apply hash-map args))   ;Combinite rest parameters into a map data structure
-        
-        {:keys [cnt ts rate]
-         :or {cnt 0 ts 0 rate 1}
-         :as counter}
-            (cond (number? counter) {:cnt cnt}
-                  (map? counter) counter
-                  :else (throw (Exception. (str "Invalid counter format |" counter "|."))))
-        
-        new-cnt (- cnt dec-value)
-        new-cnt (if max-val (min max-val new-cnt) new-cnt)
-        new-cnt (if min-val (max min-val new-cnt) new-cnt)]
-    (if (map? counter)
-      (assoc counter :cnt new-cnt)
-      new-cnt)))
-
-(defn threshold [cnt thds]
-  (let [thds (cond  (sequential? thds) thds 
-                    (number? thds) [thds]
-                    :else (throw (Exception. (str "Parameter: |" thds "| is not a valid thds format."))))
-                    
-        {:keys [cnt rate]
-         :or {rate 1}}
-            (cond (number? cnt) {:cnt cnt}
-                  (map? cnt) cnt
-                  :else (throw (Exception. (str "Invalid counter format |" cnt "|."))))
-        
-        thds (->> thds sort (map #(vector %2 (inc %1)) (range)))
-        thd (->> thds (filter #(>= cnt (first %))) last second)]
-    (cond (zero? rate) 0 
-          thd thd 
-          :else 0)))
 
 (defprotocol PCounter
   "Define stardand counter operators."
@@ -101,15 +54,6 @@ Common Scheduler models for ESL in communication fields.
         * else => 3
     "))
     
-(defn decrease [cnt dec-value & args]
-  (let [cfg (if (map? (first args))
-              (first args)
-              (apply hash-map args))
-        {:keys [min-val max-val]} cfg
-        new-cnt (- cnt dec-value)
-        new-cnt (if max-val (min max-val new-cnt) new-cnt)
-        new-cnt (if min-val (max min-val new-cnt) new-cnt)]
-    new-cnt))
 
 
 
