@@ -82,9 +82,12 @@ Common Scheduler models for ESL in communication fields.
 # Usage
 ## Parameters
 * cnt: counter.
-* thds: Threshold. There are two format:
-  - number: Threshold value.
-  - sequence: [max-threshold stage1-ofst stage2-ofst ...]
+* thd<number>: Base threshold.
+* high-thd-ofst-seq: Multi thresholds offset from thd. 
+  The format is: [stage1-ofst stage2-ofst ... stageN-ofst]
+* current-stge: Current stage.
+* low-thd-ofst-seq: Low threshold offsets from high thresholds.
+  The format is: [stage0-ofst stage1-ofst stage2-ofst ... stageN-ofst]
 ## Return
   
 "
@@ -92,7 +95,6 @@ Common Scheduler models for ESL in communication fields.
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
         (if (>= cnt thd) 1 0))))
-
  ([cnt thd multi-thd-ofst-seq]
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
@@ -100,17 +102,14 @@ Common Scheduler models for ESL in communication fields.
                              (reductions +)
                              (map #(+ % thd))
                              (cons thd))
-         
               high-stage (threshold-stage cnt high-thds)]
           high-stage))))
-          
  ([cnt thd current-stage low-thd]
    (let [{:keys [cnt ts rate]} (parse-counter cnt)]
      (cond (zero? rate) 0
            (and (zero? current-stage) (>= cnt thd)) 1
            (and (== 1 current-stage) (<= cnt low-thd)) 0
            :else current-stage)))
-
   ([cnt thd multi-thd-ofst-seq current-stage low-thd-ofst-seq]
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
@@ -119,92 +118,9 @@ Common Scheduler models for ESL in communication fields.
                              (map #(+ % thd))
                              (cons thd))
               low-thds (map #(- %1 %2) high-thds low-thd-ofst-seq)
-         
               high-stage (threshold-stage cnt high-thds)]
           (cond (> high-stage current-stage) high-stage
                 (< high-stage current-stage) (threshold-stage cnt low-thds)
                 :else current-stage))))))
 
-(defprotocol PCounter
-  "Define stardand counter operators."
-  (Decrease [this value & cfgs]
-    "
-    ## Parameters
-    * args: Extends parameters list. Includes:
-      - args[0]: Max value of counter.
-      - args[1]: Min value of counter. 
-    ")
-  (Threshold [this thds]
-    " - thds: One or more thresholds. For example thds is [50 80 100]:
-        * If cnt is belong in (-inf, 50)  => 0
-        * If cnt is belong in [50, 80) => 1
-        * If cnt is belong in [80, 100) => 2
-        * else => 3
-    "))
-    
-(defn decrease [cnt dec-value & args]
-  (let [cfg (if (map? (first args))
-              (first args)
-              (apply hash-map args))
-        {:keys [min-val max-val]} cfg
-        new-cnt (- cnt dec-value)
-        new-cnt (if max-val (min max-val new-cnt) new-cnt)
-        new-cnt (if min-val (max min-val new-cnt) new-cnt)]
-    new-cnt))
 
-
-
-(defrecord counter [cnt])
-
-(extend counter
-  PCounter
-  { :Decrease 
-      (fn [{:keys [cnt] :as this} value & cfgs]
-        (let [new-cnt (apply decrease cnt value cfgs)]
-          (counter. new-cnt)))
-
-    :Threshold
-      (fn [{:keys [cnt]} thds]
-        (threshold cnt thds))})
-
-(defn new-counter
-  ([] (->counter 0))
-  ([init] (->counter init)))
-  
-  
-  
-  
-  
-;
-(defprotocol PShaper
-  (Update [this nts cfg] [this nts cfg dec-tk])
-  (Flowctrl [this fc]))
-
-(defrecord shaper [tk rate ts])
-
-(extend shaper
-  PCounter
-  {:Decrease
-     (fn [{:keys [tk rate ts]} dec-val & cfgs]
-       (shaper. (apply decrease tk dec-val cfgs) rate ts))
-   :Threshold
-     (fn [{:keys [tk rate]} thds]
-       (if (zero? rate) 0 (threshold tk thds)))}
-  PShaper
-  {:Update
-     (fn [{:keys [tk rate ts] :as this} nts {:keys [pir] :as cfg}]
-       (if (zero? rate)
-         (shaper. tk rate nts)
-         (let [new-tk (- ts nts)
-               new-tk (* pir rate new-tk)
-               new-tk (decrease new-tk new-tk cfg)]
-           (shaper. new-tk rate nts))))
-   :Flowctrl
-     (fn [{:keys [tk rate ts] :as this} fc]
-   ;    (if (zero? fc)
-   ;      (update-shaper this nts))
-       (shaper. tk fc ts))})
-
-(defn new-shaper
-  ([] (->shaper 0 1 0)))
-  
