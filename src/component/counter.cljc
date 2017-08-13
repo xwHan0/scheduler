@@ -24,7 +24,7 @@ Common Scheduler models for ESL in communication fields.
   # Parameters:
   * shp-token: Token of shaper. Default is 100. Used for :run, defined by DSL
   * shp-ts: Ts value of last update token. Default is 0. Used for :run and :update, defined by DSL
-  * shp-pir-func: Increasing token action. Default is #(- %1 (get %2 :shp-ts 0)). The syntax is: (ts sc)=>inc-token-value. Used for :run and defined by DSL
+  * shp-pir-func: Increasing token acption. Default is #(- %1 (get %2 :shp-ts 0)). The syntax is: (ts sc)=>inc-token-value. Used for :run and defined by DSL
   * shp-dec-func: Decreasing token action. The syntax is: (sc gnt)=>dec-token-value. Default is (constantly 1). Used for :update and defined by DSL
   * shp-cbs: Max value of shp-token. Default is 100. Used for :update and defiend by DSL.
   * shp-dfs: Min value of shp-token. Default is 100. Used for :update and defiend by DSL. Note this value should be a minus number.
@@ -92,6 +92,10 @@ Common Scheduler models for ESL in communication fields.
 ## Return
   
 "
+ ([cnt]
+    (let [{:keys [cnt ts rate]} (parse-counter cnt)]
+      (if (zero? rate) 0
+        (if (>= cnt 0) 1 0))))
  ([cnt thd]
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
@@ -124,4 +128,16 @@ Common Scheduler models for ESL in communication fields.
                 (< high-stage current-stage) (threshold-stage cnt low-thds)
                 :else current-stage))))))
 
-
+(defn update
+  [counter nts & args]
+  (let [{:keys [cir]} (apply parse-config args)
+        {:keys [cnt ts rate]} (parse-counter counter)
+        ts-diff (* cir (- ts nts))]
+    (if (zero? rate)
+      (assoc counter :ts nts)
+      (assoc counter :ts nts :cnt ts-diff))))
+      
+(defn flowctrl
+  ([counter rate nts & args]
+    (assoc (update counter nts args) 
+           :rate rate)))
