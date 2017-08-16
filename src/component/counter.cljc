@@ -128,7 +128,10 @@ Common Scheduler models for ESL in communication fields.
                 (< high-stage current-stage) (threshold-stage cnt low-thds)
                 :else current-stage))))))
 
-(defn update
+(defn update-shp
+"
+Update shaper token.
+"
   [counter nts & args]
   (let [{:keys [cir]} (apply parse-config args)
         {:keys [cnt ts rate]} (parse-counter counter)
@@ -138,6 +141,7 @@ Common Scheduler models for ESL in communication fields.
       (assoc counter :ts nts :cnt ts-diff))))
       
 (defn flowctrl
+  ([rate] rate)
   ([counter rate nts & args]
     (assoc (update counter nts args) 
            :rate rate)))
