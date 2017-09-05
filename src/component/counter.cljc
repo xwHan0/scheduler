@@ -35,17 +35,8 @@ Common Scheduler models for ESL in communication fields.
   component.counter
   )
   
-(defn- parse-counter [cnt]
-  (cond (number? cnt) {:cnt cnt :ts 0 :rate 1}
-        (map? cnt) (into {:cnt 0 :ts 0 :rate 1} cnt)
-        :else (throw (Exception. (str "Invalid counter format |" cnt "|.")))))
 
-(defn- parse-config [args]
-  (if (map? (first args))  ;Configured value set
-    (into {:min-val 0 :max-val 9999999999 :cir 1 :recycle? true} (first args))   ;
-    (apply hash-map args)))
-
-(defn dec-cnt [counter dec-value & args]
+(defn dec-cnt [cnt dec-value & args]
   "
   # Introduce
   Decrease a value of dec-value for counter and return a counter.
@@ -56,8 +47,7 @@ Common Scheduler models for ESL in communication fields.
     - map format: Includes :cnt field at least.
      
   "
-  (let [{:keys [min-val max-val]} (apply parse-config args)
-        {:keys [cnt ts rate]} (parse-counter counter)
+  (let [{:keys [min-val max-val recycle?]} (apply parse-config args)
         new-cnt (- cnt dec-value)
         new-cnt (cond (> new-cnt max-val)
                         (if recycle?
@@ -67,11 +57,30 @@ Common Scheduler models for ESL in communication fields.
                         (if recycle?
                           (- max-val (- min-val new-cnt))
                           (max min-val new-cnt))
-                      :else new-cnt)]
-    (if (map? counter)
-      (assoc counter :cnt new-cnt)
-      new-cnt)))
+                      :else new-cnt)
+    new-cnt))
+    
+(defn inc-cnt
+  [counter value & args] (apply dec-cnt counter (- value) args))
 
+
+(defn large?
+  [counter cmp & args]
+  (let [{:keys [recycle? min-val max-val]} (apply parse-config args)
+        {:keys [cnt]} (parse-counter counter)]
+    (if recycle?
+      (let [mid (- max-val min-val)
+            lcnt (> cnt mid)
+            nlcnt (not lcnt)
+            lcmp (> cmp mid)
+            nlcmp (not lcmp)
+            ncnt (if lcnt (- cnt mid) (- cnt min-val))
+            ncmp (if lcmp (- cmp mid) (- cmp min-val))]
+        (cond (and lcnt lcmp) (>= ncnt ncmp)
+              (and nlcnt nlcmp) (>= ncnt ncmp)
+              (and lcnt nlcmp) (< ncnt ncmp)
+              :else (< ncnt ncmp)))
+      (>= cnt cmp))))
 
 (defn- threshold-stage [cnt thds]
   (let [thds (->> thds (map #(vector %2 (inc %1)) (range)))
@@ -128,20 +137,3 @@ Common Scheduler models for ESL in communication fields.
                 (< high-stage current-stage) (threshold-stage cnt low-thds)
                 :else current-stage))))))
 
-(defn update-shp
-"
-Update shaper token.
-"
-  [counter nts & args]
-  (let [{:keys [cir]} (apply parse-config args)
-        {:keys [cnt ts rate]} (parse-counter counter)
-        ts-diff (* cir (- ts nts))]
-    (if (zero? rate)
-      (assoc counter :ts nts)
-      (assoc counter :ts nts :cnt ts-diff))))
-      
-(defn flowctrl
-  ([rate] rate)
-  ([counter rate nts & args]
-    (assoc (update counter nts args) 
-           :rate rate)))
