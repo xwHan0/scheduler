@@ -86,6 +86,20 @@ Common Scheduler models for ESL in communication fields.
   (let [thds (->> thds (map #(vector %2 (inc %1)) (range)))
         thd (->> thds (filter #(>= cnt (first %))) last second)]
     (if thd thd 0)))
+    
+(defn- threshold-judge 
+  ([cnt thd {:keys [min-thd-ofst max-rate] :or {min-thd-ofst 0 max-rate 100}}]
+    (let [min-thd (- thd min-thd-ofst)]
+      (cond (< cnt min-thd) false
+            (>= cnt thd) true
+            :else (let [x (- cnt min-thd)
+                        y (* x (/ max-rate min-thd-ofst))
+                        r (random 100)]
+                    (>= r y)))))
+  ([cnt thd status {:keys [low-thd-ofst] :or {low-thd-ofst 0}}]
+    (if status
+      (< cnt (- thd low-thd-ofst))
+      (>= cnt thd))))
 
 (defn threshold
 "
@@ -109,7 +123,21 @@ Common Scheduler models for ESL in communication fields.
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
         (if (>= cnt thd) 1 0))))
- ([cnt thd multi-thd-ofst-seq]
+ ([cnt thd & cfgs]
+   (let [status? (number? (first cfgs))
+         status (if status? (first cfgs) 0)
+         cfgs (if status? (next cfgs) cfgs)
+         rsts (if status?
+                (map #(threshold-judge thd (> status %2) %1) cfgs (range))
+                (map #(threshold-judge thd %) cfgs))]
+     (loop [rst rsts idx (range)]
+       (if rst
+         (let [r (first rst)]
+           (if (zero? r)
+             (first idx)
+             (recur (next rst) (next idx))))
+         (count rsts)))))
+ #_([cnt thd multi-thd-ofst-seq]
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
         (let [high-thds (->> multi-thd-ofst-seq
@@ -118,13 +146,13 @@ Common Scheduler models for ESL in communication fields.
                              (cons thd))
               high-stage (threshold-stage cnt high-thds)]
           high-stage))))
- ([cnt thd current-stage low-thd]
+ #_([cnt thd current-stage low-thd]
    (let [{:keys [cnt ts rate]} (parse-counter cnt)]
      (cond (zero? rate) 0
            (and (zero? current-stage) (>= cnt thd)) 1
            (and (== 1 current-stage) (<= cnt low-thd)) 0
            :else current-stage)))
-  ([cnt thd multi-thd-ofst-seq current-stage low-thd-ofst-seq]
+  #_([cnt thd multi-thd-ofst-seq current-stage low-thd-ofst-seq]
     (let [{:keys [cnt ts rate]} (parse-counter cnt)]
       (if (zero? rate) 0
         (let [high-thds (->> multi-thd-ofst-seq
