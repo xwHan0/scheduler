@@ -1,0 +1,160 @@
+
+<html>
+<body>
+
+<h1>Introduce</h1>
+<p>Scheduler is a selector which decides one from a 
+set of nodes which stored in a sequence collection 
+through some strategy like find and search functions. </p>
+<p>A scheduler can be orgnized by more than one sub-scheduler 
+to form a hierachy scheduler tree. Every none-leaflet 
+node processes decide or selection among all sub nodes 
+through a customed schedule algorithm.</p>
+<embed src="svg/hierachy.svg"></embed>
+
+<h1>Concept</h1>
+<p>A scheuler node is consist of below component.</p>
+<h2>Scheduler Node</h2>
+<p>Scheduler node is a map who describes a scheduling variables 
+and actions. A scheduler node must includes below item at least:</p>
+
+<table border="1">
+<tr><th>Name</th><th>Format</th><th>Description</th></tr>
+<tr>
+  <td>req</td>
+  <td>number</td> 
+  <td>Request information to parent scheduler node.
+    <ul>
+      <li>[1,inf]: Designated priority by user. The larger of the 
+          value is the high of priority. e.x. 3>2.</li>
+      <li>0: Invalid request or none request to parent scheduler node</li>
+      <li>[-inf,-1]: Bypassed priority from sub scheduler's grant.</li>
+      <li>Ingore means the request from :run's grant which is called 
+        request bypass. This field is added by user. runsch maroc 
+        bypass the sub nodes' priority and the bypass priority value 
+        should be minus.</li>
+    </ul>
+  </td>
+</tr>
+
+<tr>
+  <td>gnt</td> 
+  <td>number</td>
+  <td>The grant position in sub nodes. :run function processes 
+      selection scheduling from all sub nodes and adds this field 
+      automatically.</td>
+</tr>      
+
+<tr>
+  <td>subs</td>
+  <td>vector</td>
+  <td>A vector of sub-node. This field is added by defsch 
+      macro automatically for none leaflet node. Added by request 
+      function for leaflet node.</td> 
+</tr> 
+      
+<tr>
+  <td>ts</td> 
+  <td>number</td>
+  <td>Add on the process of :run function for schedule result. 
+      Note that only decided node's ts field is valid.</td>
+</tr>
+
+<tr>
+  <td>lvl</td>
+  <td>number</td>
+  <td>Scheduler node depth in whole scheuler tree. This field 
+    is added by defsch macro automatic.</td>
+</tr>
+
+<tr>
+  <td><a name="run">run</a></td>
+  <td>(cfg-param-map ts &amp; subs)=>gnt-node</td>
+  <td>Schedule process function. It is a basic scheduler any may combined 
+      with some middlewares by defsch macro. This field is added by
+       defsch macro automatic.</td>
+</tr>
+
+<tr>
+  <td><a name="update">update</a></td> 
+  <td>(update nodes)</td> 
+  <td>It is same with :run that combination and injection by 
+      defsch macro. This field is added by defsch macro automatic.</td> 
+</tr> 
+
+</table>
+
+<h2>Scheduler</h2>
+<p>Scheduler is a map who provides basic selection process 
+from subs. There are two fields in this map:</p>
+<table border="1">
+<tr><th>Name</th><th>Format</th><th>Description</th></tr>
+<tr>
+  <td>run</td>
+  <td>function</td>
+  <td>Please refer to Scheduler Node's <a href="#run">run</a> description.</td>
+</tr>
+<tr>
+  <td>update</td>
+  <td>function</td>
+  <td>Please refer to Scheduler Node's <a href="#update">update</a> description.</td>
+</tr>
+</table>
+
+<h2>Middleware</h2>
+<p>Middleware is a function or closure who provides some extends 
+functions base scheduler.</p>
+<h3>Syntax</h3>
+<p>(&amp; midware-params) =&gt; {:run :update} </p>
+<table border="1">
+<tr><th>Name</th><th>Format</th><th>Description</th></tr>
+<tr>
+  <td>handler</td>
+  <td>map</td>
+</tr>
+<tr>
+  <td>midware-params</td>
+  <td>-</td>
+  <td>Middleware paramters. Middleware designer designate.</td>
+</tr>
+<tr>
+  <td>run</td>
+  <td>function</td>
+  <td>Please refer to Scheduler Node's <a href="#run">run</a> description.</td>
+</tr>
+<tr>
+  <td>update</td>
+  <td>function</td>
+  <td>Please refer to Scheduler Node's <a href="#update">update</a> description.</td>
+</tr>
+</table>
+
+<p>Sub Topic</p>
+<ul>
+  <li><a href="common_middleware.html">Common Middleware</a></li>
+  <li><a href="middleware_create.html">How to custom a middleware</a></li>
+</ul>
+
+<h1>Usage</h1>
+<h2>Basic Functions</h2>
+<h3>defsch</h3>
+<h3>request</h3>
+<h3>request-grp</h3>
+<h3>runsch</h3>
+<h2>Scheduler DSL</h2>
+
+## Hierachy Scheduler DSL
+Scheduler.core uses special scheduler DSL syntax descripted a hierachy scheduler.
+Syntax: sch-dsl ::= [sch sch-cfg-map <middleware middleware-cfg-map ...> <sub-sch-dsl>]
+Where:
+* sch: A name of scheduler
+* sch-cfg-map: A map for configure value of a scheduler. The keyword is dependent with scheduler and detail please refer to scheduler parameter definition document (RD and UD types).
+* middleware: Middleware symbol for extend function
+* sub-sch-dsl: Sub-scheduler define. It has the same syntax with sch-dsl
+
+Scheduler.core uses this special DSL to build a hierachy schedule tree map who's node is a schedule request map except leaflet node's request.
+
+<h1>Example</h1>
+
+</body>
+</html>

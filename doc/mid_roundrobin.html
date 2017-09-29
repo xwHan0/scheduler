@@ -1,0 +1,28 @@
+
+<html>
+<body>
+
+<h1>Introduce</h1>
+<p>Weight Round Robin.</p>
+<p>WRR applies one weight ([1, inf]) to every schedule node.
+And excepts an output schedule chance meets the configued
+weights.</p>
+<p>The basic principle is.</p>
+<ul>
+  <li>Set a weight count (wgt) for every node to record 
+  current node selection time. Initialize the count by weight value.</li>
+  <li>Decrease wgt with 1 when scheduler selecting corresponding node.</li>
+  <li>Stop selecting corresponding node when wgt is small than zero.</li>
+  <li>Reload all wgts with corresponding weight when none node can be selecting</li>
+</ul>
+
+<h1>DWRR</h1>
+<p>WRR with deficit.</p>
+<p>WRR implements a weighted distribution based as scheduling chance.
+DWRR extends this weighted distribution to any custom unit. DWRR decreade a weighted 
+unit which user customed instead of 1 when selects a node.</p>
+<p>DWRR needs a explict weighted distribution unit. Default is byte.</p>
+
+
+</body>
+</html>
