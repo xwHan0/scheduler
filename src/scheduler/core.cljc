@@ -3,37 +3,9 @@
     :doc "Common Scheduler models for ESL in communication fields.
 
 
-# Introduce
-Scheduler is a selector which decides one from a set of nodes which stored in a sequence collection through some strategy like find and search functions. 
-
-A scheduler can be orgnized by more than one sub-scheduler to form a hierachy scheduler tree. Every none-leaflet node processes decide or selection among all sub nodes through a customed schedule algorithm.
-
-## Schedule Node
-
-The schedule node is a map data structure who includes below field at least:
-
-* req<optional>: The request priority.
- - [1,inf]: Designated priority by user. The larger of the value is the high of priority. e.x. 3>2.
- - 0: Invalid request.
- - [-inf,-1]: Bypassed priority from sub scheduler's grant.
- - Ingore means the request from :run's grant which is called request bypass. This field is added by user. runsch maroc bypass the sub nodes' priority and the bypass priority value should be minus.
- 
-* lvl: Schedule tree depth. This field is added by defsch macro automatic.
 
 
-* index: The position of grant in all requests. :run function processes selection scheduling from all sub nodes and adds this field automatically.
 
-* ts: Add on the process of :run function for schedule result. Note that only decided node's ts field is valid.
-
-* run: Schedule process function. The form is: (sch-param-map ts & sub-node) => grant-map, where:
-```
-(fn [cfg-param-map    ;scheduler configure map
-     ts         ;time for scheduler run
-     & nodes]   ;shcuduler requestion collection
-  {:req   ;Grant priority. 0 means none grant
-   :index}) ;Grant position in requestion
-```
-:run function may be a scheduler' :run function. It also may be a combination of a scheduler' :run function and one or more middleware' :run functions. The combination and injection from scheduler.core's scheduler and middleware :run function to schedule request's :run function is processed by defsch macro. This field is added by defsch macro automatic.
 
 * :update : A schedule update configures function after :fun function which takes a schedule map and a grant map parameters and returns a new schedule map. like:
 ```
@@ -41,9 +13,6 @@ The schedule node is a map data structure who includes below field at least:
      gnt]         ;Grant map
   new-sc-map)
 ```
-:updare is same with :run that combination and injection by defsch macro. This field is added by defsch macro automatic.
-
-* subs: A vector of sub-node. This field is added by defsch macro automatically for none leaflet node. Added by request function for leaflet node.
 
 
 ## Schedule Grant
@@ -65,16 +34,6 @@ A extend wrap of scheduler is used to expand features of basic scheduler. A midd
 ## params-map
 Configured variables and process temporary variables for scheduler or middleware. 
 
-## Hierachy Scheduler DSL
-Scheduler.core uses special scheduler DSL syntax descripted a hierachy scheduler.
-Syntax: sch-dsl ::= [sch sch-cfg-map <middleware middleware-cfg-map ...> <sub-sch-dsl>]
-Where:
-* sch: A name of scheduler
-* sch-cfg-map: A map for configure value of a scheduler. The keyword is dependent with scheduler and detail please refer to scheduler parameter definition document (RD and UD types).
-* middleware: Middleware symbol for extend function
-* sub-sch-dsl: Sub-scheduler define. It has the same syntax with sch-dsl
-
-Scheduler.core uses this special DSL to build a hierachy schedule tree map who's node is a schedule request map except leaflet node's request.
 
 
 ### defsch macro
