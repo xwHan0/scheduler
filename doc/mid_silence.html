@@ -2,41 +2,9 @@
 <html>
 <body>
 
-<h1>Custom Middleware</h1>
-<p>Calendar provides a map from original sub nodes 
-to a user designated table who represents the selection
-sequence from sub nodes.</p>
-
-
-<h2>Common Parameter Middleware</h2>
-<p>Uses a common function as a middlrware.</p>
-<pre>
-  (defn middleware-name [handler]
-    {:run (fn [{:keys [paramter] :as cfg} ts &amp; subs]
-            (let [new-subs ...
-                  gnt (apply (:run handler) ts new-subs)]
-              gnt))
-     :update (fn ...)})
-</pre>
-
-<h2>Indepent Parameter Middleware</h2>
-<h2>Use macro</h2>
-
-<table border="1">
-<tr><th>Name</th><th>Format</th><th>Description</th></tr>
-<tr>
-  <td>calendar_tbl</td>
-  <td>sequence</td> 
-  <td>Orignal node index table. The value is a number 
-  represented the index of orignal sub nodes.</td>
-</tr>
-</table>
-<p>Calendar uses the map table and orignal sub nodes 
-sequence to generate a new nodes sequence, and puts
-it into scheduler. After gets grant, demaps it into
-orignal sub node.</p>
-
-
+<h1>Introduce</h1>
+<p>A schedule limited strategy. The basic principle is: 
+stops N (configured) cycles after a schedule node is selected.</p>
 
 </body>
 </html>

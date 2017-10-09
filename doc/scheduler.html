@@ -19,15 +19,37 @@ through a customed schedule algorithm.</p>
 and actions. A scheduler node must includes below item at least:</p>
 
 <table border="1">
-<tr><th>Name</th><th>Format</th><th>Description</th></tr>
+<tr><th>Name</th><th>Format</th><th>Type</th><th>Description</th><th>Default</th></tr>
+<tr>
+  <td>ptr</td> 
+  <td>number</td>
+  <td>Atom</td>
+  <td>The selection start position.</td>
+  <td>0</td>
+</tr>
+
 <tr>
   <td>req</td>
-  <td>number</td> 
+  <td>number vector</td> 
+  <td>Atom</td>
   <td>Request information to parent scheduler node.
     <ul>
+      <li>The higher of index, the low of priority. For req0 and req1, 
+          the compare actions is:
+          <ul>
+            <li>Enumerates all req nodes starting from index 0. </li>
+            <li>For node[i], compares and gets result
+              <ul>
+                <li>if req0[i] &gt; req1[i] then the result is req0 &gt; req1</li>
+                <li>if req0[i] &lt; req1[i] then the result is req0 &lt; req1</li>
+                <li>if req0[i] == req1[i] then iterates req0[i+1] and req1[i+1]</li>
+              </ul>
+            </li>
+            <li>if all corresponding nodes of req0[i] and req1[i] are equal then the result is req0==req1</li>
+          </ul>
       <li>[1,inf]: Designated priority by user. The larger of the 
           value is the high of priority. e.x. 3>2.</li>
-      <li>0: Invalid request or none request to parent scheduler node</li>
+      <li>() or nil: Invalid request or none request to parent scheduler node</li>
       <li>[-inf,-1]: Bypassed priority from sub scheduler's grant.</li>
       <li>Ingore means the request from :run's grant which is called 
         request bypass. This field is added by user. runsch maroc 
@@ -35,51 +57,75 @@ and actions. A scheduler node must includes below item at least:</p>
         should be minus.</li>
     </ul>
   </td>
+  <td>()</td>
 </tr>
 
 <tr>
   <td>gnt</td> 
   <td>number</td>
+  <td>Atom</td>
   <td>The grant position in sub nodes. :run function processes 
       selection scheduling from all sub nodes and adds this field 
-      automatically.</td>
+      automatically.
+    <ul>
+      <li>[0,inf]: Valid grant and it's index.</li>
+      <li>-1: Invalid or none grant.</li>
+      <li>subs: Sub schedule nodes information.</li>
+    </ul></td>
+  <td>-1</td>
 </tr>      
 
 <tr>
   <td>subs</td>
   <td>vector</td>
+  <td></td>
   <td>A vector of sub-node. This field is added by defsch 
       macro automatically for none leaflet node. Added by request 
-      function for leaflet node.</td> 
+      function for leaflet node.</td>
+  <td>nil</td> 
 </tr> 
       
 <tr>
   <td>ts</td> 
   <td>number</td>
+  <td>Atom</td>
   <td>Add on the process of :run function for schedule result. 
       Note that only decided node's ts field is valid.</td>
+  <td>0</td>
 </tr>
 
 <tr>
   <td>lvl</td>
   <td>number</td>
+  <td></td>
   <td>Scheduler node depth in whole scheuler tree. This field 
     is added by defsch macro automatic.</td>
+  <td>0</td>
 </tr>
 
 <tr>
   <td><a name="run">run</a></td>
-  <td>(cfg-param-map ts &amp; subs)=>gnt-node</td>
+  <td>(param-map ts &amp; subs)=>gnt-node</td>
+  <td></td>
   <td>Schedule process function. It is a basic scheduler any may combined 
       with some middlewares by defsch macro. This field is added by
-       defsch macro automatic.</td>
+       defsch macro automatic.
+    <ul>
+      <li>param-map: Configure and template varible map.</li>
+      <li>ts: Current time stamp from runsch macro.</li>
+      <li>subs: Sub schedule nodes information.</li>
+    </ul>
+  </td>
+  <td></td>
 </tr>
 
 <tr>
   <td><a name="update">update</a></td> 
   <td>(update nodes)</td> 
+  <td></td>
   <td>It is same with :run that combination and injection by 
       defsch macro. This field is added by defsch macro automatic.</td> 
+  <td>0</td>
 </tr> 
 
 </table>
@@ -100,6 +146,11 @@ from subs. There are two fields in this map:</p>
   <td>Please refer to Scheduler Node's <a href="#update">update</a> description.</td>
 </tr>
 </table>
+<p>Sub Topic</p>
+<ul>
+  <li><a href="common_scheduler.html">Common Scheduler</a></li>
+  <li><a href="middleware_create.html">How to custom a middleware</a></li>
+</ul>
 
 <h2>Middleware</h2>
 <p>Middleware is a function or closure who provides some extends 
