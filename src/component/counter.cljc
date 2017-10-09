@@ -60,9 +60,8 @@ Common Scheduler models for ESL in communication fields.
                       :else new-cnt)
     new-cnt))
     
-(defn inc-cnt
-  [counter value & args] (apply dec-cnt counter (- value) args))
-
+(defn inc-cnt [counter value & args] (apply dec-cnt counter (- value) args))
+(defn clear [counter & args] 0)
 
 (defn large?
   [counter cmp & args]
