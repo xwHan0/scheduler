@@ -1,0 +1,10 @@
+.fifo {
+    fill:white;
+    stroke:#000000;
+}
+
+.xoff {
+    fill:white;
+    stroke: #000000;
+    transform: rotate(45deg);
+}
